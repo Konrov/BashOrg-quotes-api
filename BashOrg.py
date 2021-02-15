@@ -1,57 +1,84 @@
 import re
+from typing import List
 from httpx import get as httpx_get
 from random import randint as random_randint
-from html import unescape
+from random import choice as random_choice
+from html import unescape as html_unescape
 from time import sleep as time_sleep
 
 
 """
 TODO:
-    - In-memory list with 100+ quotes for more responsibility
     - Change flask to sanic
 """
 
 class Quotes:
-    
-    """
-    Bashorg (Bash.im) quotes mini api.
-    wardsenz at konrov dot com
-    
-    """
-    
+
+
     LATEST_ID = 0
-    ATTEMPS = 1
-    
-    
-    def __init__(self, retry_if_same=False, debug=False):
-        self._debug = debug
-        self._retry = retry_if_same
+
+    """ In-memory list of quotes """
+    CACHED_QUOTES = []
+
+
+    def __init__(self,
+                use_cache=True,
+                cache_limit=100):
+
+        self._cache = use_cache
+        self._limit = cache_limit
     
     
     @classmethod
-    def update_latest(cls, id):
+    def update_latest(cls, id: int) -> None:
         cls.LATEST_ID = id
-    
-    
+
+
     @classmethod
-    def update_attemps(cls):
-        cls.ATTEMPS *= 3
+    def __cache_append(cls, quote: list) -> None:
+
+        cls.CACHED_QUOTES.append(quote)
     
-    
+
     @classmethod
-    def reset_attemps(cls):
-        cls.ATTEMPS = 1
+    def __cache_update(cls, updated_cache: list) -> None:
+
+        cls.CACHED_QUOTES = updated_cache
     
+
+    def cache_append(self, quote: list) -> None:
+
+        if not self._cache:
+            return
+        id = quote[0]
+        CACHED_QUOTES = self.CACHED_QUOTES
+        cache_len = len(CACHED_QUOTES)
+
+        if cache_len > self._limit:
+            """
+            Cut off half of the list if it contains more quotes
+            than set in cache_limit
+
+            """
+            self.__cache_update(CACHED_QUOTES[int(cache_len * 0.5):])
+            CACHED_QUOTES = self.CACHED_QUOTES
+
+        for _quote in CACHED_QUOTES:
+            if id in _quote:
+                return
+
+        self.__cache_append(quote)
     
-    def __clean_html(self, raw_html):
+
+    def __clean_html(self, raw_html: str) -> str:
         """ stackoverflow.com/a/12982689 """
         # cleanr = re.compile('<.*?>|&([a-z0-9]+|#[0-9]{1,6}|#x[0-9a-f]{1,6});')
         cleanr = re.compile('<.*?>')
         cleantext = re.sub(cleanr, '', raw_html)
         return cleantext
     
-    
-    def __magic(self, text):
+
+    def __magic(self, text: str) -> str:
         
         """
         Response example:
@@ -91,12 +118,12 @@ class Quotes:
         text = self.__clean_html(text)
         
         """ 8. Finally, removing html entities """
-        text = unescape(text)
+        text = html_unescape(text)
         
         return text
     
-    
-    def __get_quote_details(self, quote):
+
+    def __get_quote_details(self, quote: str) -> List[str]:
         
         quote = self.__magic(quote)
         
@@ -128,22 +155,37 @@ class Quotes:
         
         return [quote_id, quote_date, quote]
     
-    
-    def get_new_quote(self):
+
+    def __get_new_quote(self) -> str:
         
-        response = httpx_get('https://bash.im/forweb/?{}'.format(random_randint(0, 84294)))
-        response = response.text
-        if 'borq' not in response:
+        url = 'https://bash.im/forweb/?{}'.format(random_randint(0, 100500))
+        resp = httpx_get(url).text
+        if 'borq' not in resp:
             return False
-        id, date, quote = self.__get_quote_details(response)
-        if self._retry and id == self.LATEST_ID:
-            time_sleep(self.ATTEMPS)
-            if self._debug:
-                print("Got same id. Sleeping for {}".format(self.ATTEMPS))
-            self.update_attemps()
-            self.get_new_quote()
-        self.update_latest(id)
-        self.reset_attemps()
+        return self.__get_quote_details(resp)
+
+
+    def __get_cached_quote(self) -> List[str]:
+
+        return random_choice(self.CACHED_QUOTES)
+
+
+    def new_quote(self) -> List[str]:
+
+        _quote = self.__get_new_quote()
+        id, date, quote = _quote
+
+        if id == self.LATEST_ID and self._cache and \
+            len(self.CACHED_QUOTES) * 100 / self._limit > 20:
+                """
+                If the number of quotes in the list reaches
+                at least 20% of the limit
+
+                """
+                id, date, quote = self.__get_cached_quote()
+
+        self.update_latest(_quote[0])
+        self.cache_append(_quote)
         
         return [id, date, quote]
 

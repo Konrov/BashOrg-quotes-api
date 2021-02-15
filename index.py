@@ -9,11 +9,11 @@ app = Flask(__name__)
 app.config['JSON_SORT_KEYS'] = False
 app.config['JSON_AS_ASCII'] = False
 
-_version_ = '0'
+_version_ = '0.1'
 _debug_ = False
 
 APP_HEADERS = {
-        "X-Source-Url": "https://github.com/Konrov",
+        "X-Source-Url": "https://github.com/Konrov/BashOrg-quotes-api",
         "X-Parser-Ver": _version_,
         "Server": "Flask"
 }
@@ -42,7 +42,7 @@ def index_route():
 @app.route('/random-quote')
 def random_quote():
     
-    quote_details = Quotes.get_new_quote()
+    quote_details = Quotes.new_quote()
     if not quote_details:
         return Api.ret_error("Bash.im server returned unexpected response")
     quote_id, quote_date, quote_text = quote_details
