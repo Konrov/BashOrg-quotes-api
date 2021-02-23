@@ -8,46 +8,50 @@ class MiniApi:
 
     """
 
-    def __init__(self, headers: dict) -> None:
+    DefaultResponseFormat = Tuple[Dict[str, object], int, Dict[Any, Any]]
+
+    def __init__(this, headers: dict) -> None:
         if not isinstance(headers, dict):
             raise Exception(
                 "The \"headers\" arg must be a dict. Got \"{}\"".format(type(headers).__name__)
                 )
-        self.custom_headers = headers
+        this.custom_headers = headers
 
 
-    def ret_error(self,
+    def ret_error(this,
                 message: str = "Unexpected server error occurred.",
+                description: str = "no description",
                 code: int = 200
-                ) -> Tuple[Dict[str, object], int, Dict[object, object]]:
+                ) -> DefaultResponseFormat:
 
         return {
             "ok": False,
-            "error_message": message
-        }, code, self.custom_headers
+            "error_message": message,
+            "description": description
+        }, code, this.custom_headers
 
 
-    def ret_ok(self,
+    def ret_ok(this,
                 title: str = "response",
                 result: object = None,
                 code: int = 200
-                ) -> Tuple[Dict[str, object], int, Dict[Any, Any]]:
+                ) -> DefaultResponseFormat:
 
         return {
             "ok": True,
             "result": {title: result}
-        }, code, self.custom_headers
+        }, code, this.custom_headers
 
 
-    def ret_msg(self,
+    def ret_msg(this,
                 message: str = "Success",
                 code: int = 200
-                ) -> Tuple[Dict[str, object], int, Dict[Any, Any]]:
+                ) -> DefaultResponseFormat:
 
         return {
             "ok": True,
             "message": message
-        }, code, self.custom_headers
+        }, code, this.custom_headers
 
 
     @staticmethod

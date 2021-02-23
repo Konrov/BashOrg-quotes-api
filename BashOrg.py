@@ -1,15 +1,11 @@
 import re
 from typing import List
-from random import randint as random_randint
-from random import choice as random_choice
-from html import unescape as html_unescape
-from httpx import get as httpx_get
+from random import randint      as random_randint
+from random import choice       as random_choice
+from html   import unescape     as html_unescape
+from json   import loads        as json_loads
+from httpx  import get          as httpx_get
 
-
-
-
-# TODO:
-#     - Change flask to sanic
 
 class Quotes:
 
@@ -20,12 +16,12 @@ class Quotes:
     CACHED_QUOTES: List[list] = []
 
 
-    def __init__(self,
+    def __init__(this,
                 use_cache: bool = True,
                 cache_limit: int = 100):
 
-        self._cache = use_cache
-        self._limit = cache_limit
+        this._cache = use_cache
+        this._limit = cache_limit
 
 
     @classmethod
@@ -46,27 +42,27 @@ class Quotes:
         cls.CACHED_QUOTES = updated_cache
 
 
-    def cache_append(self, quote: list) -> None:
+    def cache_append(this, quote: list) -> None:
 
-        if not self._cache:
+        if not this._cache:
             return
         quote_id = quote[0]
-        cached_quotes = self.CACHED_QUOTES
+        cached_quotes = this.CACHED_QUOTES
         cache_len = len(cached_quotes)
 
-        if cache_len > self._limit:
+        if cache_len > this._limit:
 
             # Cut off half of the list if it contains more quotes
             # than set in cache_limit
 
-            self.__cache_update(cached_quotes[int(cache_len * 0.5):])
-            cached_quotes = self.CACHED_QUOTES
+            this.__cache_update(cached_quotes[int(cache_len * 0.5):])
+            cached_quotes = this.CACHED_QUOTES
 
         for _quote in cached_quotes:
             if quote_id in _quote:
                 return
 
-        self.__cache_append(quote)
+        this.__cache_append(quote)
 
 
     @staticmethod
@@ -78,7 +74,7 @@ class Quotes:
         return cleantext
 
 
-    def __magic(self, text: str) -> str:
+    def __magic(this, text: str) -> str:
 
         """
         Bash.im response example:
@@ -113,7 +109,7 @@ class Quotes:
         text = text[1:-1]
 
         # 7. Clean html tags
-        text = self.__clean_html(text)
+        text = this.__clean_html(text)
 
         # 8. Finally, removing html entities
         text = html_unescape(text)
@@ -121,9 +117,9 @@ class Quotes:
         return text
 
 
-    def __get_quote_details(self, quote: str) -> List[str]:
+    def __get_quote_details(this, quote: str) -> List[str]:
 
-        quote = self.__magic(quote)
+        quote = this.__magic(quote)
 
         re_find_date = r"\d{2}.\d{2}.\d{4}"
         re_find_id = r"\#\d+"
@@ -151,23 +147,68 @@ class Quotes:
         return [quote_id, quote_date, quote]
 
 
-    def __get_new_quote(self) -> List[str]:
+    def __get_new_quote(this) -> List[str]:
 
         url = 'https://bash.im/forweb/?{}'.format(random_randint(0, 100500))
         resp = httpx_get(url).text
         if 'borq' not in resp:
             return []
-        return self.__get_quote_details(resp)
+        return this.__get_quote_details(resp)
 
 
-    def __get_cached_quote(self) -> List[str]:
+    def __get_cached_quote(this) -> List[str]:
 
-        return random_choice(self.CACHED_QUOTES)
+        return random_choice(this.CACHED_QUOTES)
 
 
-    def new_quote(self) -> List[str]:
+    def __get_quote_by_id(this, qid: int) -> List[str]:
 
-        quote = self.__get_new_quote()
+        for quote in this.CACHED_QUOTES:
+            if qid == int(quote[0]):
+                # Quote already in cache
+                return quote
+
+        # Attention! The following lines may contain hardcode
+        # and are not recommended to reading for BeautifulSoup fans.
+        _response = httpx_get('https://bash.im/quote/{}'.format(qid))
+        if _response.status_code != 200:
+            return []
+
+        html_text = _response.text
+        if not re.findall('<title>(.*?)</title>', html_text)[0].startswith('Цитата'):
+            # On main page
+            return []
+
+        if 'title="Поделиться цитатой">' not in html_text:
+            # Error page or something else
+            return []
+
+        # Format:
+        # {"id": "id", "url": "quote/id", "title": "Цитата #id", "description": "text"}
+        share_dict = re.findall("data-share=\'(.*?)\' title=", html_text)[0]
+        quote_dict = json_loads(share_dict)
+
+        quote_id = quote_dict.get('id')
+
+        _quote_text_html = quote_dict.get('description')
+        quote_text = html_unescape(_quote_text_html).replace('<br />', '\n').replace('<br>', '\n')
+        quote_text = html_unescape(quote_text) # To be sure
+
+        _quote_date_full = re.findall('quote__header_date\">(.*?)</div>', html_text, re.DOTALL)[0]
+        quote_date = re.findall(r"\d{2}.\d{2}.\d{4}", _quote_date_full)[0]
+
+        this.cache_append([quote_id, quote_date, quote_text])
+
+        return [quote_id, quote_date, quote_text]
+
+
+    def new_quote(this, get_id: int = None) -> List[str]:
+
+        if get_id:
+            quote = this.__get_quote_by_id(get_id)
+        else:
+            quote = this.__get_new_quote()
+
         if not quote:
             return []
 
@@ -176,15 +217,15 @@ class Quotes:
         # For update_latest
         _id: int = int(quote_id)
 
-        if quote_id == self.LATEST_ID and self._cache and \
-            len(self.CACHED_QUOTES) * 100 / self._limit > 20:
+        if quote_id == this.LATEST_ID and this._cache and \
+            len(this.CACHED_QUOTES) * 100 / this._limit > 20:
 
             # If the number of quotes in the list reaches
             # at least 20% of the limit
 
-            quote_id, quote_date, quote_text = self.__get_cached_quote()
+            quote_id, quote_date, quote_text = this.__get_cached_quote()
 
-        self.update_latest(_id)
-        self.cache_append(quote)
+        this.update_latest(_id)
+        this.cache_append(quote)
 
         return [quote_id, quote_date, quote_text]
